@@ -8,6 +8,17 @@
 #include <algorithm>
 #include <float.h>
 
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+
+
+double round(double number, unsigned int bits) {
+    stringstream ss;
+    ss << fixed << setprecision(bits) << number;
+    ss >> number;
+    return number;
+}
 
 bool comparison(company* a,company* b){
     return a->bpi > b->bpi;
@@ -37,6 +48,7 @@ public:
     //// 0
     typedef std::vector<company*> companyList;
     companyList advList;
+    companyList order_advList;
 
     //// 1 obo_greedy
     typedef struct{
@@ -116,6 +128,7 @@ public:
             cout << "node: " << node << "\tcst: " << cst << endl;
             ASSERT(cst > 0);
             Cost[node] = scale*cst;
+
         }
         infile.close();
     }
@@ -293,44 +306,14 @@ public:
                 }
             }
             if (flag1) {size ++; continue;}
-            // step2: uStart is not a sampled node, begin BFS to generate rr set
+            // step2: uStart is not a sampled node, begin  to generate rr set
             unsigned int n_visit_mark = 0, curIdx = 0;
             visit_mark[n_visit_mark++] = uStart;
             visit[uStart] = true;
             hyperG_R2[uStart].push_back(hyperId);
             bool flag2=false;
 
-            if (influModel == IC)
-            {
-                while (curIdx < n_visit_mark)
-                {
-                    int i = visit_mark[curIdx++];
-                    for (int j = 0; j < (int)gT[i].size(); j++)
-                    {
-                        int v = gT[i][j];
-                        if (visit[v])continue;
-                        double randDouble = sfmt_genrand_real1(&sfmtSeed);
-                        if (randDouble > probT[i][j])continue;
-                        for (int i = 0; i < nrCompanies; i ++){
-                            if (flag2) break;
-                            adv = advList.at(i);
-                            for (int j = 0; j <adv->seedSet.size(); j++){
-                                if (v == adv->seedSet[j]){
-                                    flag2 = true;
-                                    break;
-                                }
-                            }
-                        }
-                        visit[v] = true;
-                        visit_mark[n_visit_mark++] = v;
-                        hyperG_R2[v].push_back(hyperId);
-                        //++spread[v];
-                        if(flag2) break;
-                    }
-                    if(flag2) break;
-                }
-            }
-            else if (influModel == LT)
+            if (influModel == LT)
             {
                 while (curIdx < n_visit_mark)
                 {
@@ -567,7 +550,7 @@ public:
             else
                 currentRR_adopt ++;
         }
-            //// step3: switch
+        //// step3: switch
         else{
             int oldID = Adoption[it].advMaxId;
             company *old_company;
@@ -632,9 +615,6 @@ public:
             ////20230106: in fact, this case not happens in obo and iter
             //if (adv->totalInf == 0) {adv->totalRevenue = 0.0; adv->totalProfit = 0.0;};
 
-            ////20230105 revenue=max{0, r}
-            //if (adv->totalRevenue<0) adv->totalRevenue=0;
-
             adv->totalSeedCosts = 0.0;
             for (int seed : adv->seedSet){
                 adv->totalSeedCosts += Cost[seed];
@@ -671,10 +651,12 @@ public:
                 adv->totalRevenue = adv->budget * (1.0 + gammaP * ((adv->totalInf - adv->influence) / adv->influence));
             else //// host: reward
                 adv->totalRevenue = adv->budget * (1.0 + gammaR * ((adv->totalInf - adv->influence) / adv->influence));
+
+            ////20230106: in fact, this case not happens in obo and iter
             //if (adv->totalInf == 0) {adv->totalRevenue = 0.0; adv->totalProfit = 0.0;};
 
-            //// 20230104 R=max{0, R}
-            //if (adv->totalRevenue < 0)  adv->totalRevenue = 0;
+            ////20230105 revenue=max{0, r}
+            //if (adv->totalRevenue<0) adv->totalRevenue=0;
 
             cout << "\tadv total revenue :" << adv->totalRevenue << endl;
             EstRevR1 += adv->totalRevenue;
@@ -703,14 +685,14 @@ public:
         return EstCost1;
     }
 
-    //// [R2] this function estimate (upper) bound of total revenue [R2] for all companies based on their seed set
+    //// [R2] this function estimate (lower) bound of total revenue [R2] for all companies based on their seed set
     double estimateRevenueR2 (companyList advList, unsigned int R, double gammaR, double gammaP){
         company *adv;
         double EstRevR2 = 0.0;
         int total_seed = 0;
         for (int i = 0; i < nrCompanies; i ++){
             adv = advList.at(i);
-            // step1: estimate total influence
+            /// step1: estimate total influence
             double spreadRR = 0.0;
             map<int, int>::iterator iter;
             total_seed += adv->seedSet.size();
@@ -724,18 +706,26 @@ public:
             }
             adv->totalInf = spreadRR /  R * 1.0 * n;
             cout << "[R2]adv "<< adv->companyID << " total influence spread :" << adv->totalInf << "\tinfluence threshold: " << adv->influence;
-            // step2: estimate total profit
+
+            /// step2: estimate total profit
             if (adv->totalInf < adv->influence) //// host: penalty
                 adv->totalRevenue = adv->budget * (1.0 + gammaP * ((adv->totalInf - adv->influence) / adv->influence));
             else //// host: reward
                 adv->totalRevenue = adv->budget * (1.0 + gammaR * ((adv->totalInf - adv->influence) / adv->influence));
-            //if (adv->totalInf == 0) {adv->totalRevenue = 0.0; adv->totalProfit = 0.0;};
 
-            //// 20230104 R=max{0, R}
-            //if (adv->totalRevenue < 0)  adv->totalRevenue = 0;
+            ////20230106: in fact, this case not happens in obo and iter
+            //if (adv->totalInf == 0) {adv->totalRevenue = 0.0; adv->totalProfit = 0.0;};
 
             cout << "\tadv total revenue :" << adv->totalRevenue << endl;
             EstRevR2 += adv->totalRevenue;
+
+            /// step3: estimate total cost
+            double singlecost =0.0;
+            for (auto it : adv->seedSet)   singlecost += Cost[it];
+            adv->totalSeedCosts=singlecost;
+
+            /// step4: estimate total profit
+            adv->totalProfit = adv->totalRevenue-adv->totalSeedCosts;
         }
         cout << "total seed node :" << total_seed << endl;
         return EstRevR2;
@@ -788,35 +778,7 @@ public:
                 Adoption[currSeed].advMaxId=adv->companyID;
             }
         }
-/*        //step3: estimate lower bound of profit based on bpi decreasing order
-        long long numEdge = hyperGT_R2.size();
-        vector<bool> edgeMark(numEdge, false);
-        int coveredRR_count;
-        //sort(advList.begin(),advList.end(),comparison); //// order companies based on decreasing order of Bi/Ii, sort后就不能用adv = advList.at(i);
-        for (int i = 0; i < nrCompanies; i ++){
-            adv = advList.at(i);
-            for (int seed : adv->seedSet){
-                Adoption[seed].advMaxId = adv->companyID; //seed must adopt company it belongs to
-                for (auto Idx : hyperG_R2[seed])
-                {
-                    if (edgeMark[Idx]) continue;
-                    timeCount++;
-                    adv->num_coveredRR.insert(pair<int, int>((int)Idx, 0));
-                    coveredRR_count = 0;
-                    for (auto node : hyperGT_R2[Idx]){
-                        //// in  rr set Idx, count the number influenced by adv's seed
-                        //cout << "isSelect["<<node<<"] =  " << isSelect[node] << "\tadopt company: " << Adoption[node].advMaxId << endl;
-                        coveredRR_count += estimateInfnode(seed, node, adv, edgeMark);
-                    }
-                    edgeMark[Idx] = true;
-                    adv->num_coveredRR[Idx] = coveredRR_count;
 
-                    //cout << "[R2]" <<" current rr id: " << Idx << "  rr size: " << hyperGT[Idx].size() << "  covered num: " << coveredRR_count<<  endl;
-                }
-            }
-        }
-        //// 应该对每个商家的种子节点评估影响到的 R2 rr set个数和节点比例；其次商家评估的顺序怎么定？可以按照 bpi 降序
-*/
     }
 
 
@@ -899,7 +861,7 @@ public:
                 return true;
                 //break;
             }
-                //// it->second(user id) in usersExamined (update hyper_degree[user id])
+            //// it->second(user id) in usersExamined (update hyper_degree[user id])
             else {
                 int idTemp = it.node;
                 company *adv;
@@ -951,59 +913,6 @@ public:
         adv->seedSet.push_back(candidateNode);
     }
 
-    //// this function returns the best only profit-sensitive node (marginal revenue gain-cost)
-    bool selectBestPSNode_simple (infPair &bestPS, vector<int> &hyper_degree, vector<infPair> &criterQueue, unsigned int R){
-
-        if(criterQueue.empty()) return false;
-        //multimap<double,int>::iterator it = criterQueue.end(); //it 指向 multimap 最后一个元素的后一个位置
-        //it--;
-        sort (criterQueue.begin(), criterQueue.end(), cmp);
-        infPair it = criterQueue[criterQueue.size()-1]; // it 指向 criterQueue 最后一个元素（最大mpg）
-
-        while (true) {
-            while(isSelect[it.node] == 0) {//cout << "criterQueue erase node: " << it.node << "\terase adv: " << it.adv<< endl;
-                criterQueue.pop_back();
-                if(criterQueue.empty()) return false;
-                //it = criterQueue.end();
-                //it--;
-                it = criterQueue[criterQueue.size()-1];
-            }
-            //// it->second(user id) is not in usersExpand
-            if(usersExpand.find(it.node) == usersExpand.end()) { //this node is not explored after assignBestNode (ie. hyper_degree unchanged)
-
-                this->candidateNode = it.node;
-                bestPS.adv = it.adv; bestPS.node = it.node; bestPS.mpg = it.mpg;
-                //bestPS = std::make_pair(this->candidateNode,it->first); // should contain the ratio for CS
-                ////hyper_degree[candidateNode]=0;  // assign zero since either it will be allocated soon or will be out of the game due to
-                //criterQueue.erase(it);
-                criterQueue.pop_back();
-                return true;
-                //break;
-            }
-                //// it->second(user id) in usersExamined (update hyper_degree[user id])
-            else {
-                int idTemp = it.node;
-                company *adv;
-                for(vector<infPair>::iterator it_temp=criterQueue.begin();it_temp!=criterQueue.end();it_temp++){
-                    if(it_temp->node == idTemp){
-                        adv = advList.at(it_temp->adv);
-                        double mpg_new = (( double) n * (( double) hyper_degree[idTemp] / R)) * adv->bpi - (1.0 * Cost[idTemp]);//hyper_degree[] has updated
-                        //cout << "[update margin profit gain] adv: "<<adv->companyID << "\tnode id: " << idTemp <<"\told gain: "<<it_temp->mpg <<"\t new gain: " <<mpg_new << endl;
-                        it_temp->mpg = mpg_new;// update all elements in M'
-                    }
-                }
-                //criterQueue.erase(it++);
-                usersExpand.erase(idTemp);//已完成更新，则从待更新结点set中删除该结点
-                //cout << "[update margin profit gain] ended! " << endl;
-                sort (criterQueue.begin(), criterQueue.end(), cmp);
-                it = criterQueue[criterQueue.size()-1];
-                //criterQueue.insert(pair<double,int>(mpg_new ,idTemp));
-                //it = criterQueue.end();
-                //it--;
-            }
-        }
-
-    }
 
 
 ////-------------------------------------------------------- basic function end -----------------------------------------------------
@@ -1058,94 +967,8 @@ public:
                     edgeMark[Idx] = true;
                 }
             }
-
-            /*
-            unsigned int pointer = 0;
-
-            while (pointer<=n-1)
-            {
-                int node=inactive[pointer];
-                unsigned int i = pointer+1;
-                int pointer_new = pointer;
-                for (; i < n; i++)
-                {
-                    unsigned int it=inactive[i];
-                    ASSERT(spread[it] >= 0);
-                    if (spread[it] * 1.0 /  Cost[it]>spread[node] *1.0 / Cost[node]){
-                             node = it;
-                            pointer_new = i;
-                    }
-                }
-                if (spread[node] * 1.0 / R*n <= Cost[node])break;
-                ASSERT(node >= 0);
-                seedSet.push_back(node);
-                  cov+=spread[node];
-                  CstS+=Cost[node];
-                  tag[node] = true;
-                swap(inactive[pointer], inactive[pointer_new]);
-                ++pointer;
-                for (auto Idx : hyperG[node])
-                {
-                    if (edgeMark[Idx])continue;
-                    for (auto it : hyperGT[Idx])--spread[it];
-                    edgeMark[Idx] = true;
-                }
-            }  */
         }
-/*        else{
-            /*random_shuffle(inactive.begin(), inactive.end());
-            for (unsigned int i=0; i < n; i++)
-            {
-                int node=inactive[i];
-                if (pow(1.-1./n, n-i-1)*spread[node] * 1.0 / R*n <= Cost[node])continue;
-                ASSERT(node >= 0);
-                seedSet.push_back(node);
-                          tag[node] = true;
-                           cov+=spread[node];
-                      CstS+=Cost[node];
-                for (auto Idx : hyperG[node])
-                {
-                    if (edgeMark[Idx])continue;
-                    for (auto it : hyperGT[Idx])--spread[it];
-                    edgeMark[Idx] = true;
-                }
-            }*
 
-//distorted greedy
-            unsigned int pointer = 0;
-            for (unsigned int i=0; i < n; i++){
-                if(pointer>=n-1) break;
-                int node=inactive[pointer];
-                unsigned int j = pointer+1;
-                int pointer_new = pointer;
-                for (; j < n; j++)
-                {
-                    unsigned int it=inactive[j];
-                    //ASSERT(spread[it] >= 0);
-                    if (pow(1.-1./n, n-i-1)*spread[it] * 1.0 / R*n -  Cost[it]>pow(1.-1./n, n-i-1)*spread[node] * 1.0 / R*n -  Cost[node]){
-                        //if (spread[it] * 1.0 /  Cost[it]>spread[node] *1.0 / Cost[node]){
-                        node = it;
-                        pointer_new = j;
-                    }
-                }
-                if (pow(1.-1./n, n-i-1)*spread[node] * 1.0 / R*n <= Cost[node])break;
-                //if (spread[node] * 1.0 / R*n <= Cost[node])break;
-                ASSERT(node >= 0);
-                seedSet.push_back(node);
-                cov+=spread[node];
-                CstS+=Cost[node];
-                tag[node] = true;
-                swap(inactive[pointer], inactive[pointer_new]);
-                ++pointer;
-                for (auto Idx : hyperG[node])
-                {
-                    if (edgeMark[Idx])continue;
-                    for (auto it : hyperGT[Idx])--spread[it];
-                    edgeMark[Idx] = true;
-                }
-            }
-        }
-        */
         EstPro1=cov/R*n-CstS;
         unsigned int i=0;
         while(i++<R)EstPro2+=BuildHypergraphNodeSingle(tag);
@@ -1164,63 +987,7 @@ public:
 
     }
 
-    //// Simple-Greedy
-    double build_seedset_Simple(unsigned int R)
-    {
-        EstPro1=1.0, EstPro2=0, EstPro3=0, eps1=0., eps2=0.;
 
-        seedSet.clear();
-        double cov=0, CstS=0;
-
-        vector<bool>tag(max_n, false);
-        vector<int>inactive(max_n, 0);
-        iota(inactive.begin(), inactive.end(), 0); //initialize from 0 to n;
-        vector<int>spread(max_n, 0);
-        for (unsigned int k = 0; k < max_n; k++)spread[k] = (int)hyperG[k].size();
-        long long numEdge = hyperGT.size();
-        vector<bool> edgeMark(numEdge, false);
-
-        if(true){ //algo>0 Simple greedy
-
-            unordered_map<int,double> sc_map;
-            for(unsigned int it=0; it<max_n; it++){
-                ASSERT(spread[it] >= 0);
-                sc_map[it]=spread[it] * 1.0 - Cost[it];
-            }
-
-            while (!sc_map.empty())
-            {
-                std::pair<int,double> top = *max_element(sc_map.begin(), sc_map.end(), [](const std::pair<int, double> &p1, const std::pair<int, double> &p2){ return p1.second < p2.second;});
-                int node = top.first;
-                if (spread[node] * 1.0 / R*n <= Cost[node])break;
-                ASSERT(node >= 0);
-                seedSet.push_back(node);
-                sc_map.erase(node);
-                cov+=spread[node];
-                CstS+=Cost[node];
-                tag[node] = true;
-                for (auto Idx : hyperG[node])  // Idx: rr set
-                {//Remove from R all rr sets that are covered by node
-
-                    if (edgeMark[Idx])continue;
-                    for (auto it : hyperGT[Idx]){ // it: node id
-                        --spread[it];
-                        if(!tag[it]) sc_map[it] = spread[it] * 1.0 - Cost[it];
-                    }
-                    edgeMark[Idx] = true;
-                }
-            }
-
-
-        }
-        EstPro1=cov/R*n-CstS;
-        unsigned int i=0;
-        while(i++<R)EstPro2+=BuildHypergraphNodeSingle(tag);
-        EstPro2=EstPro2/R*n-CstS;
-        //cout << "EstPro1: " <<EstPro1<< "\tEstPro2: " << EstPro2 << endl;
-        return EstPro2;
-
-    }
 
 ////******************************* multiple companies ****************************************
 
@@ -1325,7 +1092,6 @@ public:
 
                 if (overInf[adv->companyID] == false){
                     if (estimateCurrInf(adv,R)){
-                        cout << "return gammaR"<<endl;
                         adv->bpi = (adv->budget/adv->influence) *gammaR * 1.0; overInf[adv->companyID] = true;
                     }
 
@@ -1409,7 +1175,6 @@ public:
             adv = advList.at(iterC);
             //for (unsigned int k = 0; k < max_n; k++){  ////M' = [V] * [h]
             for (int k: candidateSetT) { ////candidate set T M = [T] * [h]
-                //double mpg_temp = ((( double) n * (( double) spread[k] / R)) ) / (1.0 * Cost[k]); //为了避免在最开始的时候bpi对选种子造成的影响
                 double mpg_temp = ((( double) n * (( double) spread[k] / R)) * adv->bpi) / (1.0 * Cost[k]);
                 best.adv = adv->companyID; best.node = k; best.mpg = mpg_temp;
                 if (mpg_temp > 1.0) // marginal profit gain based on company adv > 0
@@ -1417,7 +1182,7 @@ public:
                 //cout << "initial criterQueue company id: " << adv->companyID << "\tnode: "<< k << "\t mpg: "<< mpg_temp << endl;
             }
         }
-        //cout << "allocQueueM initial begin!" <<"\t criterQueue.size: "<< criterQueue.size()<< endl;
+        cout << "allocQueueM initial begin!" <<"\t criterQueue.size: "<< criterQueue.size()<< endl;
         if (selectBestPSNode(best, spread, criterQueue, R)) // maximum profit marginal gain
             allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
         while (!allocQueueM.empty() && flag_isfull){ //stop allocation when no more company is available for allocation
@@ -1439,7 +1204,7 @@ public:
                     //cout << "current seed: " << candidateNode << "\tadv: " << adv->companyID<<"\tprofit gain: " << iter.mpg << "\tspread: " << spread[candidateNode] << endl;
                     if (overInf[adv->companyID] == false){ //// if adv_currentinf> adv_influence, change gammaP to gammaR
                         if (estimateCurrInf(adv,R))
-                        { cout << "return gammaR"<<endl;adv->bpi = (adv->budget/adv->influence) *gammaR; overInf[adv->companyID] = true;}
+                        { adv->bpi = (adv->budget/adv->influence) *gammaR; overInf[adv->companyID] = true;}
                     }
                     assignBestNode(adv, spread, edgeMark,R); // inserts into advertiser's seed set and decreases the node's attention quota
                     if (!criterQueue.empty()){
@@ -1513,7 +1278,7 @@ public:
                     if (iter.mpg > 1.0) { // if the best profit gain > 0
                         if (overInf[adv->companyID] == false){ //// if adv_currentinf> adv_influence, change gammaP to gammaR
                             if (estimateCurrInf(adv,R))
-                            { cout << "return gammaR"<<endl;adv->bpi = (adv->budget/adv->influence*1.0) *gammaR; overInf[adv->companyID] = true;}
+                            { adv->bpi = (adv->budget/adv->influence*1.0) *gammaR; overInf[adv->companyID] = true;}
                         }
                         //cout << "[profit batch] current seed: " << candidateNode << " current company: " << adv->companyID << "  profit gain: " << iter.mpg<< endl;
                         assignBestNode(adv, spread, edgeMark,R); // inserts into advertiser's seed set and decreases the node's attention quota
@@ -1566,7 +1331,7 @@ public:
                     if (iter.mpg > 1.0) { // if the best profit gain > 0
                         if (overInf[adv->companyID] == false){ //// if adv_currentinf> adv_influence, change gammaP to gammaR
                             if (estimateCurrInf(adv,R))
-                            { cout << "return gammaR IS"<<endl;adv->bpi = (adv->budget / adv->influence *1.0) *gammaR; overInf[adv->companyID] = true;}
+                            { adv->bpi = (adv->budget / adv->influence *1.0) *gammaR; overInf[adv->companyID] = true;}
                         }
                         //cout << "[influence batch] current seed: " << candidateNode << " current company: " << adv->companyID << "  profit gain: " << iter.mpg << endl;
                         assignBestNode(adv, spread, edgeMark,R); // inserts into advertiser's seed set and decreases the node's attention quota
@@ -1628,99 +1393,6 @@ public:
         }
     }
 
-    //// 4. this function is allocation method: M' = [V] * [h] metroid
-    void allocate_simple(unsigned int R, double gammaR, double gammaP)
-    {
-        allocQueueM.clear(); // (adv id, node id, max gain) (<int, int, double>)
-        usersExpand.clear();
-        criterQueue.clear();
-        isSelect.clear();
-
-        Adoption = vector<adoptInfo> (max_n);
-        for (int i = 0; i < max_n; i ++){
-            Adoption[i].advMaxId = -1; Adoption[i].Maxweight = 0.0;
-        }
-
-        for (int i = 0; i < nrCompanies; i ++){ //clear adv seedset
-            company *adv;
-            adv = advList.at(i);
-
-            adv->seedSet.clear();
-            adv->seedSet.shrink_to_fit();
-
-            adv->num_coveredRR.clear();
-            adv->totalProfit = 0.0; adv->totalRevenue = 0.0; adv->totalSeedCosts = 0.0;
-            adv->currentInf = 0.0; adv->totalInf = 0.0; adv->isFull = 0;
-
-            adv->bpi = (float) adv->budget/adv->influence;
-            adv->bpi = adv->bpi * gammaP *1.0;
-        }
-
-        vector<bool> overInf (nrCompanies, false);
-        isSelect = std::vector<int>(max_n,1); // only disjointness
-        vector<int>spread(max_n, 0);
-        for (unsigned int k = 0; k < max_n; k++)spread[k] = (int)hyperG[k].size();
-        long long numEdge = hyperGT.size();
-        vector<bool> edgeMark(numEdge, false);
-        infPair best;  // (adv id, node id, marginal profit gain) (<int,int, double>)
-        company *adv;
-
-        for (int iterC = 0; iterC < nrCompanies; iterC ++){ // M' = [h] * [n]
-            adv = advList.at(iterC);
-            for (unsigned int k = 0; k < max_n; k++){  ////M' = [V] * [h]
-                double mpg_temp = ((( double) n * (( double) spread[k] / R)) * adv->bpi) - (1.0 * Cost[k]);
-                best.adv = adv->companyID; best.node = k; best.mpg = mpg_temp;
-                if (mpg_temp > 0) // marginal profit gain based on company adv > 0
-                    criterQueue.push_back(best);
-                //cout << "initial criterQueue company id: " << adv->companyID << "\tnode: "<< k << "\t mpg: "<< mpg_temp << endl;
-            }
-        }
-        cout << "allocQueueM initial begin!" <<"\t criterQueue.size: "<< criterQueue.size()<< endl;
-        if (selectBestPSNode_simple(best, spread, criterQueue, R)) // maximum profit marginal gain
-            allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
-        while (!allocQueueM.empty()){ //stop allocation when no more company is available for allocation
-            infPair iter = allocQueueM[allocQueueM.size()-1];
-            adv = advList.at(iter.adv);
-            allocQueueM.pop_back();
-            if (adv->isFull){ // find the next best node
-                if (!criterQueue.empty()){
-                    if (selectBestPSNode_simple(best, spread, criterQueue, R)) // maximum profit marginal gain
-                        allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
-                }
-                continue;
-            }
-            if(isSelect[candidateNode] > 0) { // if the best candidate still has chance for assignment
-                if(iter.mpg > 0) { // if the best profit gain > 0
-                    //cout << "current seed: " << candidateNode << "\tadv: " << adv->companyID<<"\tprofit gain: " << iter.mpg << "\tspread: " << spread[candidateNode] << endl;
-                    if (overInf[adv->companyID] == false){ //// if adv_currentinf> adv_influence, change gammaP to gammaR
-                        if (estimateCurrInf(adv,R))
-                        { cout << "return gammaR"<<endl;adv->bpi = (adv->budget/adv->influence) *gammaR; overInf[adv->companyID] = true;}
-                    }
-                    assignBestNode(adv, spread, edgeMark,R); // inserts into advertiser's seed set and decreases the node's attention quota
-                    if (!criterQueue.empty()){
-                        if (selectBestPSNode_simple(best, spread, criterQueue, R)) // maximum profit marginal gain
-                            allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
-                    }
-                } // end of marginal profit>0 feasible part
-                else{ // if not marginal profit>0 feasible, we stop the allocation for this advertiser so sktir et
-                    cout << "adv " <<adv->companyID <<" [marginal profit <= 0] " << endl;
-                    ////isSelect[candidateNode] = 0;
-                    adv->isFull = 1;
-                    if (!criterQueue.empty()){
-                        if (selectBestPSNode_simple(best, spread, criterQueue, R)) // maximum profit marginal gain
-                            allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
-                    }
-                }
-
-            }// isSelect[candidateNode] > 0
-            else {  //select another best node for this advertiser cause this seed is already allocated to another advertiser due to allocation priority
-                if (!criterQueue.empty()){
-                    if (selectBestPSNode_simple(best, spread, criterQueue, R)) // maximum profit marginal gain
-                        allocQueueM.push_back(best);//(adv id, node id, marginal profit gain)
-                }
-            }
-        }
-    }
 
 
 

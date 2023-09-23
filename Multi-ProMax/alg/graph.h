@@ -22,6 +22,8 @@ public:
 	vector<vector<double>> probT;
     set<int> nodes;
 
+    vector<int>outdeg;
+
 
     enum InfluModel {IC, LT};
     InfluModel influModel;
@@ -86,6 +88,7 @@ public:
 
             probT[b].push_back(p);
             gT[b].push_back(a);
+            ++outdeg[a];
 
             if (a>=max_n) max_n = a;
             if (b>=max_n) max_n = b;
@@ -94,9 +97,30 @@ public:
         max_n ++;
         cout << "max_n: " << max_n <<endl;
         infile.close();
+/*
+        //// probability on edge : Weighted cascade （1/d_v^in）
+        set<int>::iterator Iter;
+        //cout << "nodes size: " <<nodes.size() << endl;
 
+        for(Iter = nodes.begin(); Iter != nodes.end(); Iter ++)
+        {
+            int Idx = *Iter;
+            if (gT[Idx].size() == 0)//Idx has no in-neighbor
+            {
+                probT[Idx].push_back(INT_MAX); //the influence probability is maximum when no user can influence Idx
+                continue;
+            }
+            float weight = 1.0 / gT[Idx].size();
+            cout << "node " << Idx << " probability weight: " << weight << endl;
+            for (int i = 0; i < gT[Idx].size(); i ++)
+            {
+                int Idy = gT[Idx][i];
+                probT[Idx][Idy] = weight;  //// edge u1--u2(weight) according to code graphT[u2].push_back(u1)
+            }
+        }
+*/
     }
-
+/*
     void readGraph_()
     {
         cout << "read Graph..." <<endl;
@@ -145,7 +169,7 @@ public:
         //fclose(fin);
         cout << "read graph end"<< endl;
     }
-
+    */
 
     Graph(string folder, string graph_file): folder(folder), graph_file(graph_file)
     {
@@ -156,6 +180,7 @@ public:
 		gT = vector<vector<int>>(n*2, vector<int>()); ////n*2
 		probT = vector<vector<double>>(n*2, vector<double>());////n*2
 		//probT = vector<vector<unsigned int>>(n, vector<unsigned int>());
+        outdeg = vector<int>(n*2, 0);
         nodes.clear();
 
 		readGraph();

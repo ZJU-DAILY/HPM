@@ -9,7 +9,7 @@ public:
     string dataset;
     double epsilon;
     string model;   
-	string type;			
+	string type;			//0 for rand, 1 for outdegree
 	double scale;			// scale of cost
 	//unsigned int batch;	  //this might be useless.
     string seedfile;
@@ -44,35 +44,28 @@ void OutputSeedSetToFile(vector<int> seed_set, string seedfile)
 void run_with_parameter(InfGraph &g, const Argument & arg)
 {
     if (arg.h == 1) {
-        cout << "\n********************************** single company (ROI) ***************************************" << endl;
-        APM::ProfitMaximizeROI(g, arg);
-        cout << "******************************** single company (ROI) end ***************************************" << endl;
-
-        cout << "\n********************************** single company (Simple) ***************************************" << endl;
-        APM::ProfitMaximizeSimple(g, arg);
-        cout << "******************************** single company (Simple) end ***************************************" << endl;
+            cout << "\n********************************** single company (ROI) ***************************************" << endl;
+            APM::ProfitMaximizeROI(g, arg);
+            cout << "******************************** single company (ROI) end ***************************************" << endl;
 
     }
     else {
         if (arg.algo == 1) {
-            cout << "\n************************* multiple companies (one by one) *******************************"<< endl;
-            APM::MultiProfitMaximize(g, arg);
-            cout << "************************* multiple companies (one by one) end *****************************"<< endl;
-        }
-        if (arg.algo == 2) {
-            cout << "\n************************* multiple companies (Fill method) *******************************"<< endl;
+            cout << "\n************************* multiple companies (Fill method) *******************************" << endl;
             APM::MultiProfitMaxFill(g, arg);
-            cout << "************************* multiple companies (Fill method) end *****************************"<< endl;
+            cout << "************************* multiple companies (Fill method) end *****************************" << endl;
+        }
+
+        //////////////////////////////////////  balance influence distribution   /////////////////////////////////
+        if (arg.algo == 2) {
+            cout << "\n************************* multiple companies (one by one) *******************************" << endl;
+            APM::MultiProfitMaximize(g, arg);
+            cout << "************************* multiple companies (one by one) end *****************************" << endl;
         }
         if (arg.algo == 3){
             cout << "\n************************** multiple companies (Iter method) ****************************" << endl;
             APM::MultiProfitMaxIter(g, arg);
             cout << "\n************************ multiple companies (Iter method) end **************************" << endl;
-        }
-        if (arg.algo == 4){
-            cout << "\n************************* multiple companies (Simple method) *******************************" << endl;
-            APM::MultiProfitMaxSimple(g, arg);
-            cout << "************************* multiple companies (Simple method) end *****************************" << endl;
         }
     }
     //INFO(g.seedSet);
@@ -82,23 +75,23 @@ void Run(int argn, char **argv)
 {
     Argument arg;
 
-    arg.model = "LT";
-    arg.scale = 0.2;
-    arg.type = "1";
+  	arg.scale = 0.2;
+  	arg.type = "1";
     arg.algo=1;
-    arg.theta = 10000;
+  	arg.theta = 10000;
     arg.epsilon=0.2;
     arg.batchPS = 10;
     arg.batchIS = 5;
-    arg.gammaR = 0.3; // reward parameter gamma
+    arg.gammaR = 1; // reward parameter gamma
     arg.gammaP = 1; // penalty parameter gamma
     arg.h = 5; // number of companies
 
     for (int i = 0; i < argn; i++)
     {
+
         if (argv[i] == string("-help") || argv[i] == string("--help") || argn == 1)
         {
-            cout << "./apm -dataset *** -epsilon ***  -model LT -time *** -theta *** -h *** -scale *** -type *** -gammaR *** -gammaP *** -algo *** -batchPS *** -batchIS ***" << endl;
+            cout << "./apm -dataset *** -epsilon ***  -model IC|LT -time *** -theta *** -h *** -scale *** -type *** -gamma *** -algo *** -batchPS *** -batchIS ***" << endl;
             return ;
         }
 		

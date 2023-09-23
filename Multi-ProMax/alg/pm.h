@@ -1,6 +1,9 @@
 #include <chrono>
 #include <ctime>
 #include <ratio>
+#include <cmath>
+
+
 
 
 #define e exp(1)
@@ -61,6 +64,10 @@ public:
                 if(g.build_seedset_ROI((unsigned int)(theta+1), cnt, epsilon, delta, estprofit))break;
                 theta*=2;
             }
+//            cout << " seed: ";
+//            for (int i = 0; i < g.seedSet.size(); i ++){
+//                cout << g.seedSet[i] << ", ";
+//            }cout << endl;
 
             high_resolution_clock::time_point endTime = high_resolution_clock::now();
             duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
@@ -70,7 +77,7 @@ public:
             //double singleprofit = estprofit - singlecost;
             total_cost += singlecost;
             total_time += (double)interval.count();
-            total_profit += estprofit;
+            total_profit += estprofit;//cout << "total_profit: " << total_profit << endl;
             totalseednum += g.seedSet.size();
         }
         cout << "Sample size " << theta << endl;
@@ -81,88 +88,8 @@ public:
 
     }
 
-    static void ProfitMaximizeSimple(InfGraph &g, const Argument &arg) //// single-Simple greedy
-    {
-        double total_profit = 0.0, total_cost = 0.0;
-        unsigned int totalseednum = 0;
-        double total_time = 0;
-        double theta = arg.theta; //stable rr set as input number
-        for (int i = 0; i < arg.time; i++) {
-            double estprofit;
-            high_resolution_clock::time_point startTime = high_resolution_clock::now();
-            g.init_hyper_graph(arg); //contains the index of node sequence
-            g.buildhypergraph((unsigned int) (theta+1));
-            estprofit=g.build_seedset_Simple((unsigned int)(theta+1));
-            total_profit += estprofit;
-            high_resolution_clock::time_point endTime = high_resolution_clock::now();
-            duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
-            total_time += (double) interval.count();
-            double singlecost = 0;
-            for (auto it : g.seedSet)singlecost += g.Cost[it];
-            total_cost += singlecost;
-            totalseednum += g.seedSet.size();
-        }
-        cout << "Sample size " << theta << endl;
-        cout << "RunningTime(s) " << total_time / arg.time << endl;
-        cout << "TotalSeedNum " << totalseednum / arg.time << endl;
-        cout << "AvgCost " << total_cost / arg.time << endl;
-        cout << "AvgProfit " << total_profit / arg.time << endl;
+    ////************************************************Multi-companys**********************************************
 
-    }
-
-	static void MultiProfitMaximize(InfGraph &g, const Argument &arg) //// one-by-one
-	{
-        vector<double> adv_cost(g.nrCompanies,0.0);
-        vector<double> adv_profit(g.nrCompanies,0.0);
-        vector<double> adv_inf(g.nrCompanies,0.0);
-        double total_profit = 0.0, total_cost = 0.0;
-        unsigned int totalseednum = 0;
-        double total_time = 0;
-        double theta = arg.theta; //stable rr set as input number
-		for (int i = 0; i < arg.time; i++) {
-            high_resolution_clock::time_point startTime = high_resolution_clock::now();
-            g.init_hyper_graph(arg); //contains the index of node sequence
-            g.buildhypergraph((unsigned int) (theta+1));
-            g.build_multi_seedsets_obo((unsigned int) (theta+1),arg.gammaR, arg.gammaP); // select seed node one-by-one
-            double single_profit = g.estimateProfit(g.advList, theta, arg.gammaR, arg.gammaP);
-            cout << "========================> total profit (one by one): " << single_profit << endl<<endl;
-            total_profit += single_profit;
-            high_resolution_clock::time_point endTime = high_resolution_clock::now();
-            duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
-            total_time += (double) interval.count();
-
-            ///--------------------------------------------------------
-            for (int i=0; i<g.nrCompanies; i++){
-                company *adv = g.advList.at(i);
-                adv_cost[adv->companyID] += adv->totalSeedCosts;
-                adv_inf[adv->companyID] += adv->totalInf;
-                adv_profit[adv->companyID] += adv->totalProfit;
-                totalseednum += adv->seedSet.size();
-            }
-            ///--------------------------------------------------------
-        }
-        for (int i=0; i<g.nrCompanies; i++){company *adv = g.advList.at(i);total_cost += adv_cost[adv->companyID];}
-        cout << "Sample size " << theta << endl;
-        cout << "RunningTime(s) " << total_time / arg.time << endl;
-        cout << "TotalSeedNum " << totalseednum / arg.time << endl;
-        cout << "AvgCost " << total_cost / arg.time << endl;
-        cout << "AvgProfit " << total_profit / arg.time << endl;
-        ////////////////  output    //////////////////
-        string method = "obo";
-        disp_mem_usage(method);
-        string result = "../../dataset/result/result0106/obo.txt";
-        ofstream out(result,ios::app);
-        out <<"times "<<arg.time<< "\t"<< arg.dataset <<"\tnum of adv "<< arg.h <<"\tepsilon "<<arg.epsilon <<"\tscale "<<arg.scale <<"\ttype "<< arg.type<<"\tgammaR "<< arg.gammaR <<"\tgammaP "<< arg.gammaP<<"\tbatchPS " <<arg.batchPS<<"\tbatchIS " <<arg.batchIS<<endl;
-        out << "Sample size " << theta <<"\tRunningTime(s) " << total_time / arg.time << endl;
-        out << "AvgProfit " << total_profit / arg.time << "\tAvgSeedCost " << total_cost / arg.time << "\tTotalSeedNum " << totalseednum / arg.time << endl;
-        for (int i=0; i<g.nrCompanies; i++){
-            company *adv = g.advList.at(i);
-            int advID = adv->companyID;
-            out << "adv " << advID <<"\t influence spread " << adv_inf[advID]/arg.time<<"\t influence threshold " << adv->influence << "\t profit " << adv_profit[advID]/arg.time << "\t cost " << adv_cost[advID]/arg.time <<endl;
-        }
-        out<< endl;
-        out.close();
-	}
 
     static void MultiProfitMaxFill(InfGraph &g, const Argument &arg) ////Fill-greedy
     {
@@ -191,7 +118,7 @@ public:
                 sum+=cost_temp[j];
                 if(sum> adv->budget)
                 {
-                    tau_i.push_back(j); // j: 当前商家所能选择的种子节点最大值
+                    tau_i.push_back(j); //
                     flag=false;
                     cost_temp.erase(cost_temp.begin(),cost_temp.begin()+j);
                     break;
@@ -236,7 +163,6 @@ public:
                 EstCost = g.estimateCost(g.advList);
                 EstPro1 = EstRev1 - EstCost;
                 cout << "==========> current total profit on R1: " << EstPro1 << endl;
-
                 ////R2
                 g.updateInfoR2(g.advList,arg.gammaP); // initial RR set covered
                 g.buildhypergraph_R2((unsigned int)(theta+1),g.advList, edgeMarkR2);//update rr set covered and node influenced in R2
@@ -246,7 +172,6 @@ public:
                 EstCost = g.estimateCost(g.advList);
                 EstPro2 = EstRev2 - EstCost;
                 cout << "==========> current total profit on R2: " << EstPro2 << endl;
-
                 double x = EstRev2 * theta / log(5.*cnt*cnt/delta)/(g.n*T1);
                 double y = (EstRev2-(1.+eps1)*EstCost) * theta / log(5.*cnt*cnt/delta)/(g.n*T2);
                 eps1=4./(sqrt(1.+8.*x)-3);
@@ -282,9 +207,50 @@ public:
         cout << "TotalSeedNum " << totalseednum / arg.time << endl;
         cout << "AvgCost " << total_cost / arg.time << endl;
         cout << "AvgProfit " << total_profit / arg.time << endl;
-
-
     }
+
+
+    //// ******************************************* Balance Multi-companys **********************************************
+
+    static void MultiProfitMaximize(InfGraph &g, const Argument &arg) //// one-by-one
+    {
+        vector<double> adv_cost(g.nrCompanies,0.0);
+        vector<double> adv_profit(g.nrCompanies,0.0);
+        vector<double> adv_inf(g.nrCompanies,0.0);
+        double total_profit = 0.0, total_cost = 0.0;
+        unsigned int totalseednum = 0;
+        double total_time = 0;
+        double theta = arg.theta; //stable rr set as input number
+        for (int i = 0; i < arg.time; i++) {
+            high_resolution_clock::time_point startTime = high_resolution_clock::now();
+            g.init_hyper_graph(arg); //contains the index of node sequence
+            g.buildhypergraph((unsigned int) (theta+1));
+            g.build_multi_seedsets_obo((unsigned int) (theta+1),arg.gammaR, arg.gammaP); // select seed node one-by-one
+            double single_profit = g.estimateProfit(g.advList, theta, arg.gammaR, arg.gammaP);
+            cout << "========================> total profit (one by one): " << single_profit << endl<<endl;
+            total_profit += single_profit;
+            high_resolution_clock::time_point endTime = high_resolution_clock::now();
+            duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
+            total_time += (double) interval.count();
+
+            ///--------------------------------------------------------
+            for (int i=0; i<g.nrCompanies; i++){
+                company *adv = g.advList.at(i);
+                adv_cost[adv->companyID] += adv->totalSeedCosts;
+                adv_inf[adv->companyID] += adv->totalInf;
+                adv_profit[adv->companyID] += adv->totalProfit;
+                totalseednum += adv->seedSet.size();
+            }
+            ///--------------------------------------------------------
+        }
+        for (int i=0; i<g.nrCompanies; i++){company *adv = g.advList.at(i);total_cost += adv_cost[adv->companyID];}
+        cout << "Sample size " << theta << endl;
+        cout << "RunningTime(s) " << total_time / arg.time << endl;
+        cout << "TotalSeedNum " << totalseednum / arg.time << endl;
+        cout << "AvgCost " << total_cost / arg.time << endl;
+        cout << "AvgProfit " << total_profit / arg.time << endl;
+    }
+
 
     static void MultiProfitMaxIter(InfGraph &g, const Argument &arg) //// Iteration
     {
@@ -307,44 +273,6 @@ public:
             high_resolution_clock::time_point endTime = high_resolution_clock::now();
             duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
             total_time += (double) interval.count();
-            for (int i=0; i<g.nrCompanies; i++){
-                company *adv = g.advList.at(i);
-                adv_cost[adv->companyID] += adv->totalSeedCosts;
-                adv_inf[adv->companyID] += adv->totalInf;
-                adv_profit[adv->companyID] += adv->totalProfit;
-                totalseednum += adv->seedSet.size();
-            }
-        }
-        for (int i=0; i<g.nrCompanies; i++){company *adv = g.advList.at(i);total_cost += adv_cost[adv->companyID];}
-        cout << "Sample size " << theta << endl;
-        cout << "RunningTime(s) " << total_time / arg.time << endl;
-        cout << "TotalSeedNum " << totalseednum / arg.time << endl;
-        cout << "AvgCost " << total_cost / arg.time << endl;
-        cout << "AvgProfit " << total_profit / arg.time << endl;
-
-    }
-
-    static void MultiProfitMaxSimple(InfGraph &g, const Argument &arg) ////Simple-greedy
-    {
-        vector<double> adv_cost(g.nrCompanies,0.0);
-        vector<double> adv_profit(g.nrCompanies,0.0);
-        vector<double> adv_inf(g.nrCompanies,0.0);
-        double total_profit = 0.0, total_cost = 0.0;
-        unsigned int totalseednum = 0;
-        double total_time = 0;
-        double theta = arg.theta; //stable rr set as input number
-        for (int i = 0; i < arg.time; i++) {
-            high_resolution_clock::time_point startTime = high_resolution_clock::now();
-            g.init_hyper_graph(arg); //contains the index of node sequence
-            g.buildhypergraph((unsigned int) (theta+1));
-            g.allocate_simple((unsigned int) (theta+1),arg.gammaR, arg.gammaP); // select seed node one-by-one
-            double single_profit = g.estimateProfit(g.advList, theta, arg.gammaR, arg.gammaP);
-            cout << "========================> total profit (Simple method): " << single_profit << endl<<endl;
-            total_profit += single_profit;
-            high_resolution_clock::time_point endTime = high_resolution_clock::now();
-            duration<double> interval = duration_cast<duration<double>>(endTime - startTime);
-            total_time += (double) interval.count();
-
             ///--------------------------------------------------------
             for (int i=0; i<g.nrCompanies; i++){
                 company *adv = g.advList.at(i);
